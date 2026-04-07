@@ -1,6 +1,5 @@
 """
 app.py — FastAPI server for the Email Triage & Response OpenEnv environment.
-
 Endpoints:
   GET  /health          → liveness check
   POST /reset           → start new episode
@@ -71,8 +70,10 @@ def health():
 
 
 @app.post("/reset", response_model=TriageObservation)
-def reset(req: ResetRequest):
+def reset(req: Optional[ResetRequest] = None):
     try:
+        if req is None:
+            req = ResetRequest()
         obs = env.reset(task_id=req.task_id, seed=req.seed)
         return obs
     except ValueError as e:
