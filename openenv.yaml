@@ -1,0 +1,147 @@
+name: email-triage-env
+version: "1.0.0"
+description: >
+  A production-grade reinforcement learning environment for training and evaluating
+  AI agents on enterprise email triage — classify, respond, escalate, and archive
+  emails under realistic SLA constraints.
+domain: natural_language
+tags:
+  - openenv
+  - email
+  - nlp
+  - enterprise
+  - customer-support
+  - rl
+
+server:
+  host: "0.0.0.0"
+  port: 7860
+
+endpoints:
+  reset: POST /reset
+  step: POST /step
+  state: GET /state
+  grade: POST /grade
+  tasks: GET /tasks
+  health: GET /health
+  websocket: ws /ws
+
+tasks:
+  - id: easy_classification
+    description: "Classify and triage 15 emails with ample time. Focus on correct categorisation."
+    difficulty: easy
+    pass_threshold: 0.60
+    max_steps: 30
+    inbox_size: 15
+
+  - id: medium_sla_pressure
+    description: "Handle 25 emails with tight SLA deadlines. Prioritise urgent emails."
+    difficulty: medium
+    pass_threshold: 0.55
+    max_steps: 50
+    inbox_size: 25
+
+  - id: hard_angry_vip
+    description: "Handle 35 emails: many VIP customers, angry complaints, tight SLAs."
+    difficulty: hard
+    pass_threshold: 0.50
+    max_steps: 70
+    inbox_size: 35
+
+observation_space:
+  type: object
+  fields:
+    current_email:
+      type: object
+      fields:
+        id: {type: string}
+        sender: {type: string}
+        subject: {type: string}
+        body: {type: string}
+        timestamp: {type: string, format: iso8601}
+        priority: {type: enum, values: [low, medium, high, urgent]}
+        category: {type: enum, values: [customer_complaint, billing_inquiry, technical_support, sales_inquiry, spam, internal, other]}
+        requires_response: {type: boolean}
+        sla_hours: {type: float}
+        sentiment: {type: enum, values: [positive, neutral, negative, angry]}
+    inbox_metrics:
+      type: object
+      fields:
+        total_emails: {type: integer}
+        unhandled: {type: integer}
+        overdue: {type: integer}
+        near_sla: {type: integer}
+        responded: {type: integer}
+        escalated: {type: integer}
+        archived: {type: integer}
+    performance:
+      type: object
+      fields:
+        correct_classifications: {type: integer}
+        incorrect_classifications: {type: integer}
+        responses_sent: {type: integer}
+        avg_response_quality: {type: float}
+        sla_breaches: {type: integer}
+        sla_met: {type: integer}
+        escalations_appropriate: {type: integer}
+        escalations_unnecessary: {type: integer}
+        spam_correctly_archived: {type: integer}
+        spam_missed: {type: integer}
+    step_num: {type: integer}
+    max_steps: {type: integer}
+    time_elapsed_minutes: {type: float}
+    reward: {type: float, nullable: true}
+    done: {type: boolean}
+    recent_actions: {type: array}
+
+action_space:
+  type: object
+  fields:
+    action_type:
+      type: enum
+      values: [triage, respond, escalate, archive, skip]
+    email_id: {type: string}
+    priority:
+      type: enum
+      values: [low, medium, high, urgent]
+      required_for: [triage]
+    category:
+      type: enum
+      values: [customer_complaint, billing_inquiry, technical_support, sales_inquiry, spam, internal, other]
+      required_for: [triage]
+    response_text: {type: string, max_length: 2000, required_for: [respond]}
+    escalation_reason: {type: string, max_length: 500, required_for: [escalate]}
+    note: {type: string, max_length: 300}
+
+reward:
+  type: dense
+  range: [-inf, +inf]
+  terminal_bonus: true
+  components:
+    - name: triage_correct
+      value: +1.0
+    - name: triage_wrong
+      value: -0.5
+    - name: priority_correct
+      value: +0.5
+    - name: priority_wrong
+      value: -0.25
+    - name: response_quality
+      range: [0.0, +1.5]
+    - name: sla_met
+      value: +0.5
+    - name: sla_breach
+      value: -1.0
+    - name: escalation_appropriate
+      value: +1.0
+    - name: escalation_unnecessary
+      value: -0.75
+    - name: spam_archived
+      value: +1.0
+    - name: wrong_archive
+      value: -1.0
+    - name: skip_urgent
+      value: -1.5
+    - name: overdue_penalty
+      value: -0.05
+      per: email_per_step

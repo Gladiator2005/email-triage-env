@@ -1,0 +1,22 @@
+[project]
+name = "email-triage-env"
+version = "1.0.0"
+description = "Email Triage & Response OpenEnv — AI agent training environment"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = [
+    "fastapi>=0.115.5",
+    "uvicorn[standard]>=0.32.1",
+    "pydantic>=2.10.3",
+    "websockets>=13.1",
+    "requests>=2.32.3",
+    "openai>=1.59.3",
+    "openenv-core>=0.2.0 ",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project.scripts]
+server = "server.app:main"
