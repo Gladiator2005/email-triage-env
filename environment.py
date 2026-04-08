@@ -700,7 +700,7 @@ def _grade_easy_classification(state: EnvironmentState) -> GraderResult:
     inbox_completion = len(state.handled_email_ids) / max(len(state.inbox), 1)
 
     score = 0.60 * acc + 0.40 * inbox_completion
-    score = round(min(max(score, 0.0), 1.0), 4)
+    score = round(min(max(score, 0.001), 0.999), 4)
 
     return GraderResult(
         task_id="easy_classification",
@@ -729,7 +729,7 @@ def _grade_medium_sla_pressure(state: EnvironmentState) -> GraderResult:
     rq = perf.avg_response_quality
 
     score = 0.40 * sla_score + 0.35 * rq + 0.25 * acc
-    score = round(min(max(score, 0.0), 1.0), 4)
+    score = round(min(max(score, 0.001), 0.999), 4)
 
     return GraderResult(
         task_id="medium_sla_pressure",
@@ -772,7 +772,7 @@ def _grade_hard_angry_vip(state: EnvironmentState) -> GraderResult:
     sla_score = perf.sla_met / max(sla_total, 1)
 
     score = 0.30 * esc_score + 0.25 * spam_score + 0.25 * rq + 0.20 * sla_score
-    score = round(min(max(score, 0.0), 1.0), 4)
+    score = round(min(max(score, 0.001), 0.999), 4)
 
     return GraderResult(
         task_id="hard_angry_vip",
