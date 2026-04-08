@@ -1,32 +1,15 @@
 """
 app.py — FastAPI server for the Email Triage & Response OpenEnv environment.
 Endpoints:
-  GET  /health          → liveness check
-  POST /reset           → start new episode
-  POST /step            → take one action
-  GET  /state           → inspect current state
-  POST /grade           → score the current episode
-  GET  /tasks           → list available tasks
-  WebSocket /ws         → streaming interface
+  GET  /             → environment info (root)
+  GET  /health       → liveness check
+  POST /reset        → start new episode
+  POST /step         → take one action
+  GET  /state        → inspect current state
+  POST /grade        → score the current episode
+  GET  /tasks        → list available tasks
+  WebSocket /ws      → streaming interface
 """
-@app.get("/")
-def root():
-    return {
-        "environment": "Email Triage & Response OpenEnv",
-        "version": "1.0.0",
-        "status": "running",
-        "endpoints": {
-            "reset": "POST /reset",
-            "step": "POST /step",
-            "state": "GET /state",
-            "grade": "POST /grade",
-            "tasks": "GET /tasks",
-            "health": "GET /health",
-            "docs": "GET /docs"
-        }
-    }
-
-
 
 from __future__ import annotations
 
@@ -37,6 +20,7 @@ from typing import Optional
 import uvicorn
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from environment import TriageEnvironment
@@ -81,6 +65,68 @@ class StepResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
+@app.get("/", response_class=HTMLResponse)
+def root():
+    return """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Email Triage & Response OpenEnv</title>
+        <style>
+            body { font-family: monospace; background: #0d1117; color: #c9d1d9; padding: 40px; }
+            h1 { color: #58a6ff; }
+            h2 { color: #79c0ff; margin-top: 30px; }
+            a { color: #58a6ff; }
+            table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+            th { background: #21262d; color: #79c0ff; padding: 8px 12px; text-align: left; }
+            td { padding: 8px 12px; border-bottom: 1px solid #21262d; }
+            .badge { background: #238636; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; }
+            code { background: #161b22; padding: 2px 6px; border-radius: 4px; }
+        </style>
+    </head>
+    <body>
+        <h1>📧 Email Triage &amp; Response OpenEnv</h1>
+        <span class="badge">● Running</span> &nbsp; version 1.0.0
+        <p>A production-grade RL environment for training AI agents on enterprise email triage —
+        classify, respond, escalate, and archive emails under realistic SLA constraints.</p>
+
+        <h2>API Endpoints</h2>
+        <table>
+            <tr><th>Method</th><th>Path</th><th>Description</th></tr>
+            <tr><td>GET</td><td><a href="/health">/health</a></td><td>Liveness check</td></tr>
+            <tr><td>POST</td><td>/reset</td><td>Start new episode (body: task_id, seed)</td></tr>
+            <tr><td>POST</td><td>/step</td><td>Take one action</td></tr>
+            <tr><td>GET</td><td><a href="/state">/state</a></td><td>Inspect current state</td></tr>
+            <tr><td>POST</td><td>/grade</td><td>Score the current episode</td></tr>
+            <tr><td>GET</td><td><a href="/tasks">/tasks</a></td><td>List available tasks</td></tr>
+            <tr><td>GET</td><td><a href="/docs">/docs</a></td><td>Interactive API docs (Swagger)</td></tr>
+            <tr><td>WS</td><td>/ws</td><td>WebSocket streaming interface</td></tr>
+        </table>
+
+        <h2>Tasks</h2>
+        <table>
+            <tr><th>ID</th><th>Difficulty</th><th>Inbox Size</th><th>Max Steps</th></tr>
+            <tr><td>easy_classification</td><td>⭐ Easy</td><td>15</td><td>30</td></tr>
+            <tr><td>medium_sla_pressure</td><td>⭐⭐ Medium</td><td>25</td><td>50</td></tr>
+            <tr><td>hard_angry_vip</td><td>⭐⭐⭐ Hard</td><td>35</td><td>70</td></tr>
+        </table>
+
+        <h2>Quick Start</h2>
+        <pre>
+# Reset environment
+curl -X POST /reset -H "Content-Type: application/json" \\
+     -d '{"task_id": "easy_classification", "seed": 42}'
+
+# Take a step
+curl -X POST /step -H "Content-Type: application/json" \\
+     -d '{"action_type": "triage", "email_id": "email_0001",
+          "priority": "high", "category": "customer_complaint"}'
+        </pre>
+    </body>
+    </html>
+    """
+
 
 @app.get("/health")
 def health():
@@ -178,7 +224,6 @@ async def websocket_endpoint(websocket: WebSocket):
                 }))
 
             else:
-                # action_field is a dict representing TriageAction
                 try:
                     action_data = action_field if isinstance(action_field, dict) else msg
                     act = TriageAction(**action_data)
@@ -195,6 +240,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
     except WebSocketDisconnect:
         pass
+
 
 def main():
     port = int(os.environ.get("PORT", 7860))
