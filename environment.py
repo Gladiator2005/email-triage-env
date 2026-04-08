@@ -247,7 +247,6 @@ class EmailGenerator:
             priority = "high"
 
         sla_hrs = _SLA[priority]
-        # Simulate some emails already partially consumed on SLA
         sla_remaining = self.rng.uniform(sla_hrs * 0.1, sla_hrs)
 
         sentiment = self.rng.choice(_SENTIMENTS[category])
@@ -342,7 +341,7 @@ class TriageEnvironment:
             "inbox_size": 15,
             "vip_ratio": 0.05,
             "spam_ratio": 0.20,
-            "sla_multiplier": 2.0,      # relaxed SLA
+            "sla_multiplier": 2.0,
             "description": "Classify and triage 15 emails with ample time. Focus on correct categorisation.",
         },
         "medium_sla_pressure": {
@@ -350,7 +349,7 @@ class TriageEnvironment:
             "inbox_size": 25,
             "vip_ratio": 0.10,
             "spam_ratio": 0.15,
-            "sla_multiplier": 0.7,      # tight SLAs
+            "sla_multiplier": 0.7,
             "description": "Handle 25 emails with tight SLA deadlines. Prioritise urgent emails.",
         },
         "hard_angry_vip": {
@@ -358,7 +357,7 @@ class TriageEnvironment:
             "inbox_size": 35,
             "vip_ratio": 0.20,
             "spam_ratio": 0.10,
-            "sla_multiplier": 0.5,      # very tight SLAs, many VIPs
+            "sla_multiplier": 0.5,
             "description": "Handle 35 emails: many VIP customers, angry complaints, tight SLAs.",
         },
     }
@@ -516,12 +515,11 @@ class TriageEnvironment:
         s = self._state
         email = self._get_email_by_id(action.email_id)
         if email is None:
-            return  # invalid action, already penalised in reward
+            return
 
         if action.email_id not in s.handled_email_ids:
             s.handled_email_ids.append(action.email_id)
 
-        # Advance to next email if acting on current
         if (s.current_email_index < len(s.inbox)
                 and s.inbox[s.current_email_index].id == action.email_id):
             s.current_email_index += 1
@@ -585,7 +583,6 @@ class TriageEnvironment:
                 reward += 1.5 * quality
                 info["response_quality"] = quality
 
-                # SLA reward/penalty
                 if email.sla_hours > 0:
                     perf.sla_met += 1
                     reward += 0.5
@@ -595,14 +592,12 @@ class TriageEnvironment:
                     reward -= 1.0
                     info["sla_breach"] = True
 
-                # Sentiment bonus: extra reward for good response to angry email
                 if email.sentiment == "angry" and quality >= 0.6:
                     reward += 0.5
                     info["angry_handled_well"] = True
 
         # --- ESCALATE action ---
         elif action.action_type == "escalate":
-            # Appropriate: urgent complaints, angry sentiment, VIP senders
             is_appropriate = (
                 email.priority == "urgent"
                 or email.sentiment == "angry"
@@ -628,14 +623,12 @@ class TriageEnvironment:
                 reward += 0.25
                 info["archived_no_response_needed"] = True
             else:
-                # Archiving something that needed a response
                 perf.spam_missed += 1
                 reward -= 1.0
                 info["wrongly_archived"] = True
 
         # --- SKIP action ---
         elif action.action_type == "skip":
-            # Penalise skipping urgent/near-SLA emails
             if email.sla_hours <= 1.0 and email.requires_response:
                 reward -= 1.5
                 info["skipped_near_sla"] = True
@@ -646,7 +639,7 @@ class TriageEnvironment:
                 reward -= 0.1
                 info["skipped"] = True
 
-        # SLA-at-zero penalty at step time
+        # Per-step overdue penalty
         overdue_count = sum(
             1 for e in s.inbox
             if e.id not in s.handled_email_ids and e.sla_hours <= 0
@@ -663,7 +656,6 @@ class TriageEnvironment:
         handled_count = len(s.handled_email_ids)
         inbox_completion = handled_count / total if total else 0.0
 
-        # Penalise unhandled urgent emails
         unhandled_urgent = sum(
             1 for e in s.inbox
             if e.id not in s.handled_email_ids and e.priority == "urgent"
@@ -705,7 +697,10 @@ def _grade_easy_classification(state: EnvironmentState) -> GraderResult:
     return GraderResult(
         task_id="easy_classification",
         score=score,
-        breakdown={"classification_accuracy": round(acc, 4), "inbox_completion": round(inbox_completion, 4)},
+        breakdown={
+            "classification_accuracy": round(acc, 4),
+            "inbox_completion": round(inbox_completion, 4),
+        },
         explanation=(
             f"Classification accuracy: {acc:.1%} ({perf.correct_classifications}/{max(total,1)}). "
             f"Inbox completion: {inbox_completion:.1%} ({len(state.handled_email_ids)}/{len(state.inbox)})."
@@ -750,15 +745,18 @@ def _grade_medium_sla_pressure(state: EnvironmentState) -> GraderResult:
 
 def _grade_hard_angry_vip(state: EnvironmentState) -> GraderResult:
     """
-    Hard task grader: escalations, spam handling, response quality for VIP/angry emails.
+    Hard task grader: escalations, spam handling, response quality, SLA.
     Score = 0.30 * escalation_score + 0.25 * spam_score + 0.25 * response_quality
           + 0.20 * sla_score
+
+    FIX: escalation_score defaults to 0.0 (not 0.5) when no escalations occur,
+         preventing the exploit of never escalating to get free score.
     """
     perf = state.performance
 
-    # Escalation score
+    # Escalation score — 0.0 default when no escalations were attempted
     esc_total = perf.escalations_appropriate + perf.escalations_unnecessary
-    esc_score = perf.escalations_appropriate / max(esc_total, 1) if esc_total > 0 else 0.5
+    esc_score = perf.escalations_appropriate / esc_total if esc_total > 0 else 0.0
 
     # Spam score
     spam_emails = [e for e in state.inbox if e.category == "spam"]
