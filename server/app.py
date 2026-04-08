@@ -9,6 +9,24 @@ Endpoints:
   GET  /tasks           → list available tasks
   WebSocket /ws         → streaming interface
 """
+@app.get("/")
+def root():
+    return {
+        "environment": "Email Triage & Response OpenEnv",
+        "version": "1.0.0",
+        "status": "running",
+        "endpoints": {
+            "reset": "POST /reset",
+            "step": "POST /step",
+            "state": "GET /state",
+            "grade": "POST /grade",
+            "tasks": "GET /tasks",
+            "health": "GET /health",
+            "docs": "GET /docs"
+        }
+    }
+
+
 
 from __future__ import annotations
 
